@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: '!contains(github.event.head_commit.message, ''chore(release)'')'
+    if: ${{ !contains(github.event.head_commit.message, 'chore(release)') }}
 
     steps:
       - uses: actions/checkout@v3
@@ -46,4 +46,4 @@ jobs:
       - name: Update Packagist
         if: success()
         run: |
-          curl -XPOST -H "content-type:application/json" "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_API_TOKEN }}" -d '{"repository":{"url":"https://packagist.org/packages/watercrawl/php"}}' 
+          curl -XPOST -H "content-type:application/json" "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_API_TOKEN }}" -d '{"repository":{"url":"https://github.com/watercrawl/watercrawl-php"}}' 
