@@ -1,6 +1,12 @@
 # WaterCrawl PHP SDK
 
-PHP SDK for WaterCrawl REST APIs
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/watercrawl/php.svg?style=flat-square)](https://packagist.org/packages/watercrawl/php)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/watercrawl/watercrawl-php/release.yml?branch=main&style=flat-square)](https://github.com/watercrawl/watercrawl-php/actions?query=workflow%3ARelease)
+[![PHP Version Support](https://img.shields.io/packagist/php-v/watercrawl/php?style=flat-square)](https://packagist.org/packages/watercrawl/php)
+[![Total Downloads](https://img.shields.io/packagist/dt/watercrawl/php.svg?style=flat-square)](https://packagist.org/packages/watercrawl/php)
+[![License](https://img.shields.io/packagist/l/watercrawl/php.svg?style=flat-square)](https://packagist.org/packages/watercrawl/php)
+
+PHP SDK for WaterCrawl REST APIs. This package provides a simple and elegant way to interact with WaterCrawl's web scraping and crawling services.
 
 ## Installation
 
@@ -10,56 +16,62 @@ You can install the package via composer:
 composer require watercrawl/php
 ```
 
+## Requirements
+
+- PHP 7.4 or higher
+- `ext-mbstring`
+- `ext-json`
+
 ## Usage
 
 ```php
-$client = new WaterCrawl\APIClient('your-api-key');
+use WaterCrawl\APIClient;
+
+// Initialize the client
+$client = new APIClient('your-api-key');
+
+// Scrape a single URL
+$result = $client->scrapeUrl('https://example.com');
 
 // Create a crawl request
-$result = $client->createCrawlRequest('https://example.com');
+$result = $client->createCrawlRequest(
+    'https://example.com',
+    ['allowed_domains' => ['example.com']],
+    ['wait_for' => '.content'],
+    ['extract' => ['title' => 'h1']]
+);
 
-// Get crawl request results
-$results = $client->getCrawlRequestResults($result['uuid']);
+// Monitor crawl progress
+foreach ($client->monitorCrawlRequest($result['uuid']) as $update) {
+    if ($update['type'] === 'result') {
+        // Process the result
+        print_r($update['data']);
+    }
+}
 ```
+
+## Features
+
+- Simple and intuitive API
+- Real-time crawl monitoring
+- Configurable scraping options
+- Automatic response handling
+- PHP 7.4+ compatibility
+- Proper UTF-8 support
 
 ## Testing
 
-To run the tests, you'll need a WaterCrawl API key. Set it as an environment variable:
-
 ```bash
-export WATERCRAWL_API_KEY=your-api-key
 composer test
 ```
 
+## Changelog
+
+Please see [CHANGELOG.md](CHANGELOG.md) for more information on what has changed recently.
+
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes using conventional commits (`git commit -m 'feat: add some feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Commit Message Format
-
-This repository follows [Conventional Commits](https://www.conventionalcommits.org/). Your commit messages should follow this format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-Types:
-- feat: A new feature
-- fix: A bug fix
-- docs: Documentation only changes
-- style: Changes that do not affect the meaning of the code
-- refactor: A code change that neither fixes a bug nor adds a feature
-- perf: A code change that improves performance
-- test: Adding missing tests or correcting existing tests
-- chore: Changes to the build process or auxiliary tools
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Security
 
