@@ -37,8 +37,7 @@ $result = $client->scrapeUrl('https://example.com');
 $result = $client->createCrawlRequest(
     'https://example.com',
     ['allowed_domains' => ['example.com']],
-    ['wait_for' => '.content'],
-    ['extract' => ['title' => 'h1']]
+    ['wait_time' => 1000]
 );
 
 // Monitor crawl progress
