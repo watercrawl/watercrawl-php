@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/watercrawl/watercrawl-php/compare/v1.0.0...v1.0.1) (2025-02-28)
+
+
+### Bug Fixes
+
+* update readme ([77e7ac4](https://github.com/watercrawl/watercrawl-php/commit/77e7ac404169724139c654f6cefbdd2dda21317e))
+
 # 1.0.0 (2025-02-27)
 
 
