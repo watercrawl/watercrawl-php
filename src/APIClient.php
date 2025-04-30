@@ -17,10 +17,37 @@ class APIClient extends BaseAPIClient
 
     /**
      * @param ResponseInterface $response
-     * @param bool $download
+     * @return array|string|Generator|null
+     * @throws RuntimeException
+     */
+    protected function processResponse(ResponseInterface $response)
+    {
+        $contentType = $response->getHeaderLine('Content-Type');
+
+        if ($response->getStatusCode() === 204) {
+            return null;
+        }
+
+        if (str_contains($contentType, 'application/json')) {
+            return json_decode($response->getBody()->getContents(), true);
+        }
+
+        if (str_contains($contentType, 'application/octet-stream') || str_contains($contentType, 'application/zip')) {
+            return $response->getBody()->getContents();
+        }
+
+        if (str_contains($contentType, 'text/event-stream')) {
+            return $this->processEventstream($response);
+        }
+
+        throw new RuntimeException("Unknown response type: {$contentType}");
+    }
+
+    /**
+     * @param ResponseInterface $response
      * @return Generator
      */
-    protected function processEventstream(ResponseInterface $response, bool $download = false): Generator
+    protected function processEventstream(ResponseInterface $response): Generator
     {
         $buffer = '';
         $stream = $response->getBody();
@@ -37,12 +64,7 @@ class APIClient extends BaseAPIClient
                 if (str_starts_with($line, 'data:')) {
                     $line = trim(substr($line, 5));
                     $data = json_decode($line, true);
-                    if ($data && isset($data['type']) && $data['type'] === 'result' && $download) {
-                        $data['data'] = $this->downloadResult($data['data']);
-                    }
-                    if ($data) {
-                        yield $data;
-                    }
+                    yield $data;
                 }
             }
         }
@@ -53,43 +75,9 @@ class APIClient extends BaseAPIClient
             if (str_starts_with($line, 'data:')) {
                 $line = trim(substr($line, 5));
                 $data = json_decode($line, true);
-                if ($data && isset($data['type']) && $data['type'] === 'result' && $download) {
-                    $data['data'] = $this->downloadResult($data['data']);
-                }
-                if ($data) {
-                    yield $data;
-                }
+                yield $data;
             }
         }
-    }
-
-    /**
-     * @param ResponseInterface $response
-     * @param bool $download
-     * @return array|string|Generator|null
-     * @throws RuntimeException
-     */
-    protected function processResponse(ResponseInterface $response, bool $download = false)
-    {
-        $contentType = $response->getHeaderLine('Content-Type');
-
-        if ($response->getStatusCode() === 204) {
-            return null;
-        }
-
-        if (str_contains($contentType, 'application/json')) {
-            return json_decode($response->getBody()->getContents(), true);
-        }
-
-        if (str_contains($contentType, 'application/octet-stream')) {
-            return $response->getBody()->getContents();
-        }
-
-        if (str_contains($contentType, 'text/event-stream')) {
-            return $this->processEventstream($response, $download);
-        }
-
-        throw new RuntimeException("Unknown response type: {$contentType}");
     }
 
     /**
@@ -152,7 +140,7 @@ class APIClient extends BaseAPIClient
 
     /**
      * @param string $itemId
-     * @return null
+     * @return null|array
      * @throws GuzzleException
      */
     public function stopCrawlRequest(string $itemId)
@@ -169,9 +157,16 @@ class APIClient extends BaseAPIClient
      */
     public function downloadCrawlRequest(string $itemId): array
     {
-        return $this->processResponse(
+        $response = $this->processResponse(
             $this->get("/api/v1/core/crawl-requests/{$itemId}/download/")
         );
+
+        // Handle string response (binary data) by wrapping it in an array
+        if (is_string($response)) {
+            return ['data' => $response, 'content_type' => 'application/zip'];
+        }
+
+        return $response;
     }
 
     /**
@@ -185,10 +180,9 @@ class APIClient extends BaseAPIClient
         return $this->processResponse(
             $this->get(
                 "/api/v1/core/crawl-requests/{$itemId}/status/",
-                null,
+                ['prefetched' => $download],
                 [RequestOptions::STREAM => true]
-            ),
-            $download
+            )
         );
     }
 
@@ -261,4 +255,187 @@ class APIClient extends BaseAPIClient
         $resultObject['result'] = json_decode($response->getBody()->getContents(), true);
         return $resultObject;
     }
-} 
+
+    /**
+     * Helper method to get a crawl request for sitemap operations
+     * 
+     * @param string|array $crawlRequest Either a crawl request UUID string or a crawl request object
+     * @return array Crawl request object
+     * @throws GuzzleException If the crawl request cannot be fetched
+     * @throws RuntimeException If the sitemap is not found in the crawl request
+     */
+    private function getCrawlRequestForSitemap($crawlRequest): array
+    {
+        if (is_string($crawlRequest)) {
+            $crawlRequest = $this->getCrawlRequest($crawlRequest);
+        }
+
+        if (!isset($crawlRequest['sitemap']) || empty($crawlRequest['sitemap'])) {
+            throw new RuntimeException('Sitemap not found in crawl request');
+        }
+
+        return $crawlRequest;
+    }
+
+    /**
+     * Download the sitemap for a given crawl request
+     * 
+     * @param string|array $crawlRequest Either a crawl request UUID string or a crawl request object
+     * @return array The sitemap data as an array
+     * @throws GuzzleException If there's an error fetching the sitemap
+     * @throws RuntimeException If the sitemap is not found in the crawl request
+     */
+    public function downloadSitemap($crawlRequest): array
+    {
+        $crawlRequest = $this->getCrawlRequestForSitemap($crawlRequest);
+        $response = $this->httpClient->request('GET', $crawlRequest['sitemap']);
+
+        return json_decode($response->getBody()->getContents(), true);
+    }
+
+    /**
+     * Download the sitemap as a graph representation
+     * 
+     * @param string|array $crawlRequest Either a crawl request UUID string or a crawl request object
+     * @return array The graph data
+     * @throws GuzzleException If there's an error fetching the sitemap graph
+     * @throws RuntimeException If the sitemap is not found in the crawl request
+     */
+    public function downloadSitemapGraph($crawlRequest): array
+    {
+        $crawlRequest = $this->getCrawlRequestForSitemap($crawlRequest);
+        $url = str_replace('/json', '/graph', $crawlRequest['sitemap']);
+        $response = $this->httpClient->request('GET', $url);
+
+        return json_decode($response->getBody()->getContents(), true);
+    }
+
+    /**
+     * Download the sitemap as markdown
+     * 
+     * @param string|array $crawlRequest Either a crawl request UUID string or a crawl request object
+     * @return string The sitemap as markdown text
+     * @throws GuzzleException If there's an error fetching the markdown
+     * @throws RuntimeException If the sitemap is not found in the crawl request
+     */
+    public function downloadSitemapMarkdown($crawlRequest): string
+    {
+        $crawlRequest = $this->getCrawlRequestForSitemap($crawlRequest);
+        $url = str_replace('/json', '/markdown', $crawlRequest['sitemap']);
+        $response = $this->httpClient->request('GET', $url);
+
+        return $response->getBody()->getContents();
+    }
+
+    /**
+     * Get a list of search requests
+     * 
+     * @param int|null $page Page number
+     * @param int|null $pageSize Number of results per page
+     * @return array List of search requests
+     * @throws GuzzleException
+     */
+    public function getSearchRequestsList(?int $page = null, ?int $pageSize = null): array
+    {
+        $queryParams = [
+            'page' => $page ?? 1,
+            'page_size' => $pageSize ?? 10
+        ];
+
+        return $this->processResponse(
+            $this->get('/api/v1/core/search/', $queryParams)
+        );
+    }
+
+    /**
+     * Get details of a specific search request
+     * 
+     * @param string $itemId UUID of the search request
+     * @param bool $download If true, download results; if false, return URLs
+     * @return array Search request details
+     * @throws GuzzleException
+     */
+    public function getSearchRequest(string $itemId, bool $download = true): array
+    {
+        return $this->processResponse(
+            $this->get("/api/v1/core/search/{$itemId}/", ['prefetched' => $download])
+        );
+    }
+
+    /**
+     * Create a new search request
+     * 
+     * @param string $query Search query
+     * @param array|null $searchOptions Search options (language, country, time_range, search_type, depth)
+     * @param int|null $resultLimit Maximum number of results to return
+     * @param bool $sync If true, wait for results; if false, return immediately
+     * @param bool $download If true, download results; if false, return URLs
+     * @return array|Generator
+     * @throws GuzzleException
+     * @throws RuntimeException
+     */
+    public function createSearchRequest(
+        string $query,
+        ?array $searchOptions = null,
+        ?int $resultLimit = null,
+        bool $sync = true,
+        bool $download = true
+    ) {
+        $response = $this->processResponse(
+            $this->post(
+                '/api/v1/core/search/',
+                null,
+                [
+                    'query' => $query,
+                    'search_options' => (object)($searchOptions ?? new \stdClass()),
+                    'result_limit' => $resultLimit
+                ]
+            )
+        );
+
+        if (!$sync) {
+            return $response;
+        }
+
+        foreach ($this->monitorSearchRequest($response['uuid'], $download) as $result) {
+            if ($result['type'] === 'state' && $result['status'] === 'finished') {
+                return $result['data'];
+            }
+        }
+
+        throw new RuntimeException('Search request failed or timed out');
+    }
+
+    /**
+     * Monitor a search request in real-time
+     * 
+     * @param string $itemId UUID of the search request to monitor
+     * @param bool $download If true, download results; if false, return URLs
+     * @return Generator Generator yielding search events
+     * @throws GuzzleException
+     */
+    public function monitorSearchRequest(string $itemId, bool $download = true): Generator
+    {
+        return $this->processResponse(
+            $this->get(
+                "/api/v1/core/search/{$itemId}/status/",
+                ['prefetched' => $download],
+                [RequestOptions::STREAM => true]
+            )
+        );
+    }
+
+    /**
+     * Stop a running search request
+     * 
+     * @param string $itemId UUID of the search request to stop
+     * @return null|array
+     * @throws GuzzleException
+     */
+    public function stopSearchRequest(string $itemId)
+    {
+        return $this->processResponse(
+            $this->delete("/api/v1/core/search/{$itemId}/")
+        );
+    }
+}
