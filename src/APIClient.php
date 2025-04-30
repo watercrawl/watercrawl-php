@@ -17,6 +17,34 @@ class APIClient extends BaseAPIClient
 
     /**
      * @param ResponseInterface $response
+     * @return array|string|Generator|null
+     * @throws RuntimeException
+     */
+    protected function processResponse(ResponseInterface $response)
+    {
+        $contentType = $response->getHeaderLine('Content-Type');
+
+        if ($response->getStatusCode() === 204) {
+            return null;
+        }
+
+        if (str_contains($contentType, 'application/json')) {
+            return json_decode($response->getBody()->getContents(), true);
+        }
+
+        if (str_contains($contentType, 'application/octet-stream') || str_contains($contentType, 'application/zip')) {
+            return $response->getBody()->getContents();
+        }
+
+        if (str_contains($contentType, 'text/event-stream')) {
+            return $this->processEventstream($response);
+        }
+
+        throw new RuntimeException("Unknown response type: {$contentType}");
+    }
+
+    /**
+     * @param ResponseInterface $response
      * @return Generator
      */
     protected function processEventstream(ResponseInterface $response): Generator
@@ -50,34 +78,6 @@ class APIClient extends BaseAPIClient
                 yield $data;
             }
         }
-    }
-
-    /**
-     * @param ResponseInterface $response
-     * @return array|string|Generator|null
-     * @throws RuntimeException
-     */
-    protected function processResponse(ResponseInterface $response): array|string|Generator|null
-    {
-        $contentType = $response->getHeaderLine('Content-Type');
-
-        if ($response->getStatusCode() === 204) {
-            return null;
-        }
-
-        if (str_contains($contentType, 'application/json')) {
-            return json_decode($response->getBody()->getContents(), true);
-        }
-
-        if (str_contains($contentType, 'application/octet-stream') || str_contains($contentType, 'application/zip')) {
-            return $response->getBody()->getContents();
-        }
-
-        if (str_contains($contentType, 'text/event-stream')) {
-            return $this->processEventstream($response);
-        }
-
-        throw new RuntimeException("Unknown response type: {$contentType}");
     }
 
     /**
@@ -143,7 +143,7 @@ class APIClient extends BaseAPIClient
      * @return null|array
      * @throws GuzzleException
      */
-    public function stopCrawlRequest(string $itemId): null|array
+    public function stopCrawlRequest(string $itemId)
     {
         return $this->processResponse(
             $this->delete("/api/v1/core/crawl-requests/{$itemId}/")
@@ -370,16 +370,17 @@ class APIClient extends BaseAPIClient
      * @param int|null $resultLimit Maximum number of results to return
      * @param bool $sync If true, wait for results; if false, return immediately
      * @param bool $download If true, download results; if false, return URLs
-     * @return array|Generator Either search results (if sync=true) or search request object (if sync=false)
+     * @return array|Generator
      * @throws GuzzleException
+     * @throws RuntimeException
      */
     public function createSearchRequest(
         string $query,
         ?array $searchOptions = null,
-        ?int $resultLimit = 5,
+        ?int $resultLimit = null,
         bool $sync = true,
         bool $download = true
-    ): array|Generator {
+    ) {
         $response = $this->processResponse(
             $this->post(
                 '/api/v1/core/search/',
@@ -431,7 +432,7 @@ class APIClient extends BaseAPIClient
      * @return null|array
      * @throws GuzzleException
      */
-    public function stopSearchRequest(string $itemId): null|array
+    public function stopSearchRequest(string $itemId)
     {
         return $this->processResponse(
             $this->delete("/api/v1/core/search/{$itemId}/")
