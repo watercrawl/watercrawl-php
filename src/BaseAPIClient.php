@@ -72,4 +72,4 @@ class BaseAPIClient
         }
         return $this->httpClient->request('PATCH', $endpoint, $options);
     }
-} 
+}
