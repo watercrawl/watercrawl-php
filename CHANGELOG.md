@@ -1,3 +1,15 @@
+# [1.1.0](https://github.com/watercrawl/watercrawl-php/compare/v1.0.1...v1.1.0) (2025-04-30)
+
+
+### Bug Fixes
+
+* ensure PHP 7.4 compatibility ([86102dd](https://github.com/watercrawl/watercrawl-php/commit/86102ddbdadad6736d401af7463e8e2fcb4b1337))
+
+
+### Features
+
+* **v0.7.1:** add MIT license and update API for v0.7.1 support ([58e0c57](https://github.com/watercrawl/watercrawl-php/commit/58e0c57514d41cb1e9428e9d9cec4111dca3573e))
+
 ## [1.0.1](https://github.com/watercrawl/watercrawl-php/compare/v1.0.0...v1.0.1) (2025-02-28)
 
 
